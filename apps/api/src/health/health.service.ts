@@ -1,22 +1,30 @@
 import { Injectable } from "@nestjs/common";
+import { PrismaService } from "../database/prisma.service.js";
 
 export interface HealthReport {
   status: "ok" | "degraded";
   service: string;
   version: string;
-  checks: Record<string, "ok" | "skipped">;
+  checks: { database: "ok" | "error" | "skipped"; redis: "skipped" };
   timestamp: string;
 }
 
-// Task 01: no dependencies wired yet. DB/Redis checks are added in Task 02 / Task 03.
 @Injectable()
 export class HealthService {
-  ready(): HealthReport {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async ready(): Promise<HealthReport> {
+    let database: "ok" | "error" = "ok";
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+    } catch {
+      database = "error";
+    }
     return {
-      status: "ok",
+      status: database === "ok" ? "ok" : "degraded",
       service: "fleetos-api",
       version: process.env.APP_VERSION ?? "0.1.0",
-      checks: { database: "skipped", redis: "skipped" },
+      checks: { database, redis: "skipped" },
       timestamp: new Date().toISOString(),
     };
   }

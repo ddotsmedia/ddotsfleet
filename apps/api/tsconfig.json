@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist", "rootDir": "src", "module": "nodenext", "moduleResolution": "nodenext",
+    "outDir": "dist", "module": "nodenext", "moduleResolution": "nodenext",
     "experimentalDecorators": true, "emitDecoratorMetadata": true, "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
