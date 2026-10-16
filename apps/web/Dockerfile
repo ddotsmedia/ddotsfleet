@@ -1,6 +1,7 @@
 FROM node:26-alpine AS build
 WORKDIR /repo
-RUN corepack enable
+RUN npm install -g pnpm@12.11.2
+ENV HUSKY=0
 COPY . .
 RUN pnpm install --frozen-lockfile --filter @fleetos/web... && pnpm --filter @fleetos/web build
 
