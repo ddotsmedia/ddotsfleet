@@ -4,7 +4,9 @@ import { PrismaClient, RoleCode } from "../src/generated/prisma/client.js";
 import { runSeed, DEMO_TENANT_ID } from "../src/database/seed.js";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for tenancy tests");
-const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }) });
+const prisma = new PrismaClient({
+  adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
+});
 const suffix = Math.random().toString(36).slice(2, 10);
 
 async function makeTenant(tag: string) {
@@ -18,10 +20,14 @@ async function makeRole(tenantId: string, code: RoleCode) {
 }
 
 describe("tenancy schema", () => {
-  beforeAll(async () => { await prisma.$connect(); });
+  beforeAll(async () => {
+    await prisma.$connect();
+  });
 
   afterAll(async () => {
-    await prisma.grant.deleteMany({ where: { tenant: undefined, membership: { tenant: { slug: { endsWith: suffix } } } } });
+    await prisma.grant.deleteMany({
+      where: { tenant: undefined, membership: { tenant: { slug: { endsWith: suffix } } } },
+    });
     await prisma.tenantMembership.deleteMany({ where: { tenant: { slug: { endsWith: suffix } } } });
     await prisma.role.deleteMany({ where: { tenant: { slug: { endsWith: suffix } } } });
     await prisma.user.deleteMany({ where: { email: { endsWith: `${suffix}@test.local` } } });
@@ -38,7 +44,9 @@ describe("tenancy schema", () => {
     const t = await makeTenant("mem");
     const u = await makeUser("mem");
     await prisma.tenantMembership.create({ data: { tenantId: t.id, userId: u.id } });
-    await expect(prisma.tenantMembership.create({ data: { tenantId: t.id, userId: u.id } })).rejects.toThrow();
+    await expect(
+      prisma.tenantMembership.create({ data: { tenantId: t.id, userId: u.id } }),
+    ).rejects.toThrow();
   });
 
   it("rejects a grant whose membership and role belong to different tenants", async () => {
@@ -57,7 +65,9 @@ describe("tenancy schema", () => {
     const u = await makeUser("ok");
     const m = await prisma.tenantMembership.create({ data: { tenantId: t.id, userId: u.id } });
     const r = await makeRole(t.id, RoleCode.supervisor);
-    const g = await prisma.grant.create({ data: { tenantId: t.id, membershipId: m.id, roleId: r.id } });
+    const g = await prisma.grant.create({
+      data: { tenantId: t.id, membershipId: m.id, roleId: r.id },
+    });
     expect(g.id).toBeTruthy();
   });
 
@@ -81,7 +91,12 @@ describe("tenancy schema", () => {
 
   it("seed is idempotent", async () => {
     await runSeed(prisma);
-    const count = () => Promise.all([prisma.permission.count(), prisma.role.count({ where: { tenantId: DEMO_TENANT_ID } }), prisma.rolePermission.count()]);
+    const count = () =>
+      Promise.all([
+        prisma.permission.count(),
+        prisma.role.count({ where: { tenantId: DEMO_TENANT_ID } }),
+        prisma.rolePermission.count(),
+      ]);
     const first = await count();
     await runSeed(prisma);
     expect(await count()).toEqual(first);
