@@ -23,6 +23,17 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 26, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - name: Apply migrations
+        run: pnpm --filter @fleetos/api db:deploy
+      - name: Migration drift check
+        env:
+          SHADOW_DATABASE_URL: postgresql://fleetos:fleetos@localhost:5432/fleetos_shadow
+        run: |
+          psql "$DATABASE_URL" -c "CREATE DATABASE fleetos_shadow"
+          pnpm --filter @fleetos/api exec prisma migrate diff --config prisma.config.ts \
+            --from-migrations ../../database/migrations --to-schema ../../database/schema.prisma --script || true
+          pnpm --filter @fleetos/api exec prisma migrate diff --config prisma.config.ts \
+            --from-migrations ../../database/migrations --to-schema ../../database/schema.prisma --exit-code
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
