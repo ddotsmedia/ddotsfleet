@@ -1,0 +1,1 @@
+{"name":"@fleetos/types","version":"0.1.0","private":true,"main":"src/index.ts","scripts":{"typecheck":"tsc --noEmit"},"devDependencies":{"typescript":"6.0.3"}}
