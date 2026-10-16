@@ -1,0 +1,31 @@
+name: ci
+on:
+  push: { branches: [main] }
+  pull_request:
+concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env: { POSTGRES_USER: fleetos, POSTGRES_PASSWORD: fleetos, POSTGRES_DB: fleetos_test }
+        ports: ["5432:5432"]
+        options: --health-cmd "pg_isready -U fleetos" --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://fleetos:fleetos@localhost:5432/fleetos_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 12.11.2 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 26, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Docker build (api, web)
+        run: |
+          docker build -f apps/api/Dockerfile -t fleetos-api:ci .
+          docker build -f apps/web/Dockerfile -t fleetos-web:ci .
