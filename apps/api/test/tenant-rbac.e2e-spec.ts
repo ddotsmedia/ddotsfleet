@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Test } from "@nestjs/testing";
-import type { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient, type RoleCode } from "../src/generated/prisma/client.js";
 import { AppModule } from "../src/app.module.js";
+import { configureApp } from "../src/app.setup.js";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for tenant RBAC tests");
 const prisma = new PrismaClient({
@@ -15,7 +16,7 @@ const PASSWORD = "correct horse battery";
 const MISSING_TENANT = "00000000-0000-4000-8000-000000000999";
 
 const email = (tag: string) => `${tag}-${suffix}@test.local`;
-let app: INestApplication;
+let app: NestExpressApplication;
 let server: Parameters<typeof request>[0];
 
 async function sessionFor(tag: string): Promise<string> {
@@ -71,8 +72,8 @@ describe("tenant context, RBAC and cross-tenant isolation", () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix("api/v1");
+    app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false });
+    configureApp(app);
     await app.init();
     server = app.getHttpServer();
 
