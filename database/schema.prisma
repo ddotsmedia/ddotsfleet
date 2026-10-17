@@ -48,6 +48,7 @@ model Tenant {
   roles       Role[]
   invitations Invitation[]
   vehicles    Vehicle[]
+  drivers     Driver[]
   auditEvents AuditEvent[]
 
   @@map("tenants")
@@ -236,13 +237,91 @@ model Vehicle {
   createdBy   String?       @map("created_by") @db.Uuid
   updatedBy   String?       @map("updated_by") @db.Uuid
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  assignments VehicleAssignment[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, fleetCode])
   @@unique([id, tenantId])
   @@index([tenantId, status])
   @@map("vehicles")
+}
+
+enum DriverStatus {
+  active
+  suspended
+  left
+}
+
+enum AssignmentStatus {
+  active
+  ended
+}
+
+model Driver {
+  id               String       @id @default(uuid()) @db.Uuid
+  tenantId         String       @map("tenant_id") @db.Uuid
+  employeeCode     String       @map("employee_code")
+  fullName         String       @map("full_name")
+  phone            String?
+  status           DriverStatus @default(active)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy        String?      @map("created_by") @db.Uuid
+  updatedBy        String?      @map("updated_by") @db.Uuid
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  licences    DriverLicence[]
+  assignments VehicleAssignment[]
+
+  @@unique([tenantId, employeeCode])
+  @@unique([id, tenantId])
+  @@index([tenantId, status])
+  @@map("drivers")
+}
+
+model DriverLicence {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  driverId        String   @map("driver_id") @db.Uuid
+  issuingCountry  String   @map("issuing_country") @db.Char(2)
+  licenceNumber   String   @map("licence_number")
+  licenceClasses  String[] @map("licence_classes")
+  expiresAt       DateTime @map("expires_at") @db.Date
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy       String?  @map("created_by") @db.Uuid
+
+  driver Driver @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([tenantId, issuingCountry, licenceNumber])
+  @@index([driverId, expiresAt])
+  @@map("driver_licences")
+}
+
+/// One row per exclusive vehicle hand-over. Partial unique indexes (migration only) allow at most one
+/// active assignment per vehicle and per driver.
+model VehicleAssignment {
+  id             String           @id @default(uuid()) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  vehicleId      String           @map("vehicle_id") @db.Uuid
+  driverId       String           @map("driver_id") @db.Uuid
+  status         AssignmentStatus @default(active)
+  startAt        DateTime         @map("start_at") @db.Timestamptz(6)
+  endAt          DateTime?        @map("end_at") @db.Timestamptz(6)
+  startOdometer  Int              @map("start_odometer")
+  endOdometer    Int?             @map("end_odometer")
+  licenceOverride String?         @map("licence_override")
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy      String?          @map("created_by") @db.Uuid
+  endedBy        String?          @map("ended_by") @db.Uuid
+
+  vehicle Vehicle @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  driver  Driver  @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@index([vehicleId, startAt])
+  @@index([driverId, startAt])
+  @@map("vehicle_assignments")
 }
 
 /// Append-only. A database trigger rejects UPDATE and DELETE.
