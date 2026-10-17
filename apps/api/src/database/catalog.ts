@@ -92,21 +92,29 @@ export const ROLE_NAMES: Record<RoleCode, string> = {
 
 export type IdFactory = (index: number) => string | undefined;
 
-/** Upserts the global permission catalog and returns code -> permission id. */
+/**
+ * Inserts the global permission catalog and returns code -> permission id.
+ * createMany with skipDuplicates is ON CONFLICT DO NOTHING, which is race-safe when tenants
+ * are created concurrently; a per-row upsert is not.
+ */
 export async function ensurePermissionCatalog(
   tx: Tx,
   makeId?: IdFactory,
 ): Promise<Map<string, string>> {
-  const permIds = new Map<string, string>();
-  for (const [i, [code, resource, action]] of PERMISSIONS.entries()) {
-    const p = await tx.permission.upsert({
-      where: { code },
-      update: {},
-      create: { id: makeId?.(i), code, resource, action },
-    });
-    permIds.set(code, p.id);
-  }
-  return permIds;
+  await tx.permission.createMany({
+    data: PERMISSIONS.map(([code, resource, action], i) => ({
+      id: makeId?.(i),
+      code,
+      resource,
+      action,
+    })),
+    skipDuplicates: true,
+  });
+  const rows = await tx.permission.findMany({
+    where: { code: { in: PERMISSIONS.map(([code]) => code) } },
+    select: { id: true, code: true },
+  });
+  return new Map(rows.map((r) => [r.code, r.id]));
 }
 
 /** Upserts the eight SRS roles for a tenant and links their permissions. Returns roleCode -> role id. */
