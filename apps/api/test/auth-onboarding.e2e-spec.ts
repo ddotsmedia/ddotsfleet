@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Test } from "@nestjs/testing";
-import type { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { AppModule } from "../src/app.module.js";
+import { configureApp } from "../src/app.setup.js";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { MAIL_TRANSPORT, type MailMessage, type MailTransport } from "../src/common/mail.js";
 
 if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is required for auth tests");
@@ -28,7 +29,7 @@ class CapturingMail implements MailTransport {
 }
 
 const mail = new CapturingMail();
-let app: INestApplication;
+let app: NestExpressApplication;
 let server: Parameters<typeof request>[0];
 
 const email = (tag: string) => `${tag}-${suffix}@test.local`;
@@ -66,8 +67,8 @@ describe("auth, onboarding and invitations", () => {
       .overrideProvider(MAIL_TRANSPORT)
       .useValue(mail)
       .compile();
-    app = moduleRef.createNestApplication();
-    app.setGlobalPrefix("api/v1");
+    app = moduleRef.createNestApplication<NestExpressApplication>({ bodyParser: false });
+    configureApp(app);
     await app.init();
     server = app.getHttpServer();
   });
