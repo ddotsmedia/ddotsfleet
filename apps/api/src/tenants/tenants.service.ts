@@ -1,16 +1,17 @@
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   Inject,
   Injectable,
   NotFoundException,
-  HttpException,
-  HttpStatus,
 } from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service.js";
 import { createTenantRoles, ensurePermissionCatalog } from "../database/catalog.js";
 import { generateToken, hashToken } from "../common/security.js";
 import { MAIL_TRANSPORT, type MailTransport } from "../common/mail.js";
+import type { TenantAccess } from "../access/access.service.js";
 import type { RoleCode } from "../generated/prisma/client.js";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -62,38 +63,55 @@ export class TenantsService {
     }
   }
 
-  /** Caller must be an active member of the tenant holding the company_admin role. Checked server-side. */
-  async assertTenantAdmin(userId: string, tenantId: string): Promise<{ name: string }> {
-    const membership = await this.prisma.tenantMembership.findUnique({
-      where: { tenantId_userId: { tenantId, userId } },
-      include: {
-        grants: { include: { role: { select: { roleCode: true } } } },
-        tenant: { select: { name: true, status: true } },
+  async getTenant(access: TenantAccess) {
+    return this.prisma.tenant.findUniqueOrThrow({
+      where: { id: access.tenantId },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        country: true,
+        timezone: true,
+        currency: true,
+        status: true,
       },
     });
-    if (!membership) throw new NotFoundException("tenant_not_found");
-    const isAdmin = membership.grants.some((g) => g.role.roleCode === "company_admin");
-    if (membership.status !== "active" || !isAdmin || membership.tenant.status !== "active") {
-      throw new ForbiddenException("company_admin_required");
-    }
-    return { name: membership.tenant.name };
   }
 
-  async createInvitation(
-    actorId: string,
-    tenantId: string,
-    input: { email: string; roleCode: RoleCode },
-  ) {
-    const { name } = await this.assertTenantAdmin(actorId, tenantId);
+  /** Bounded list; cursor pagination is added with the first large-list feature. */
+  async listMembers(tenantId: string) {
+    const rows = await this.prisma.tenantMembership.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+      select: {
+        id: true,
+        status: true,
+        joinedAt: true,
+        user: { select: { id: true, email: true, displayName: true } },
+        grants: { select: { role: { select: { roleCode: true } } } },
+      },
+    });
+    return rows.map((m) => ({
+      membershipId: m.id,
+      status: m.status,
+      joinedAt: m.joinedAt,
+      user: m.user,
+      roleCodes: m.grants.map((g) => g.role.roleCode),
+    }));
+  }
+
+  /** The tenant comes from the verified access context, never from the request body. */
+  async createInvitation(access: TenantAccess, input: { email: string; roleCode: RoleCode }) {
     const token = generateToken();
     const expiresAt = new Date(Date.now() + INVITATION_TTL_MS);
     const invitation = await this.prisma.invitation.create({
       data: {
-        tenantId,
+        tenantId: access.tenantId,
         email: input.email,
         roleCode: input.roleCode,
         tokenHash: hashToken(token),
-        invitedById: actorId,
+        invitedById: access.userId,
         expiresAt,
       },
       select: { id: true, email: true, roleCode: true, expiresAt: true },
@@ -101,7 +119,7 @@ export class TenantsService {
     const base = process.env.APP_URL ?? "http://localhost:3000";
     await this.mail.send({
       to: input.email,
-      subject: `You have been invited to ${name} on FleetOS`,
+      subject: `You have been invited to ${access.tenantName} on FleetOS`,
       text: `Accept your invitation: ${base}/invitations/accept?token=${token}\nThis link expires at ${expiresAt.toISOString()}.`,
     });
     return invitation;
