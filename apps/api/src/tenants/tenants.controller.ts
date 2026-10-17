@@ -1,8 +1,15 @@
-import { Body, Controller, Param, Post, UseGuards } from "@nestjs/common";
+import { Body, Controller, Get, Post, UseGuards } from "@nestjs/common";
 import { z } from "zod";
 import { RoleCode } from "../generated/prisma/client.js";
 import { CurrentAuth, SessionGuard } from "../auth/session.guard.js";
 import { parseInput, type AuthContext } from "../common/validation.js";
+import {
+  PermissionsGuard,
+  RequirePermissions,
+  TenantAccessContext,
+  TenantGuard,
+} from "../access/access.guards.js";
+import type { TenantAccess } from "../access/access.service.js";
 import { TenantsService } from "./tenants.service.js";
 
 const createTenantSchema = z.object({
@@ -19,8 +26,6 @@ const createInvitationSchema = z.object({
   roleCode: z.enum(Object.values(RoleCode)),
 });
 
-const tenantIdSchema = z.uuid();
-
 @Controller("tenants")
 @UseGuards(SessionGuard)
 export class TenantsController {
@@ -31,17 +36,33 @@ export class TenantsController {
     return this.tenants.createTenant(caller.userId, parseInput(createTenantSchema, body));
   }
 
+  @Get(":tenantId")
+  @UseGuards(TenantGuard)
+  async get(@TenantAccessContext() access: TenantAccess) {
+    return this.tenants.getTenant(access);
+  }
+
+  @Get(":tenantId/access")
+  @UseGuards(TenantGuard)
+  access(@TenantAccessContext() access: TenantAccess) {
+    return {
+      tenantId: access.tenantId,
+      roleCodes: access.roleCodes,
+      permissions: [...access.permissions].sort(),
+    };
+  }
+
+  @Get(":tenantId/members")
+  @UseGuards(TenantGuard, PermissionsGuard)
+  @RequirePermissions("membership:manage")
+  async members(@TenantAccessContext() access: TenantAccess) {
+    return this.tenants.listMembers(access.tenantId);
+  }
+
   @Post(":tenantId/invitations")
-  async invite(
-    @CurrentAuth() caller: AuthContext,
-    @Param("tenantId") tenantId: string,
-    @Body() body: unknown,
-  ) {
-    const id = parseInput(tenantIdSchema, tenantId);
-    return this.tenants.createInvitation(
-      caller.userId,
-      id,
-      parseInput(createInvitationSchema, body),
-    );
+  @UseGuards(TenantGuard, PermissionsGuard)
+  @RequirePermissions("membership:manage")
+  async invite(@TenantAccessContext() access: TenantAccess, @Body() body: unknown) {
+    return this.tenants.createInvitation(access, parseInput(createInvitationSchema, body));
   }
 }
