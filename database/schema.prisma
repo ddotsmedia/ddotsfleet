@@ -240,14 +240,17 @@ model Vehicle {
   createdBy   String?       @map("created_by") @db.Uuid
   updatedBy   String?       @map("updated_by") @db.Uuid
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  assignments VehicleAssignment[]
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  assignments      VehicleAssignment[]
   maintenancePlans MaintenancePlan[]
-  workOrders WorkOrder[]
-  serviceEvents ServiceEvent[]
-  defects Defect[]
-  checkouts VehicleCheckout[]
-  inspections Inspection[]
+  workOrders       WorkOrder[]
+  serviceEvents    ServiceEvent[]
+  defects          Defect[]
+  checkouts        VehicleCheckout[]
+  inspections      Inspection[]
+  trips            Trip[]
+  dispatchJobs     DispatchJob[]
+  dailyReviews     DailyReview[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, fleetCode])
@@ -268,23 +271,25 @@ enum AssignmentStatus {
 }
 
 model Driver {
-  id               String       @id @default(uuid()) @db.Uuid
-  tenantId         String       @map("tenant_id") @db.Uuid
-  employeeCode     String       @map("employee_code")
-  fullName         String       @map("full_name")
-  phone            String?
-  status           DriverStatus @default(active)
-  linkedUserId     String?      @map("linked_user_id") @db.Uuid
-  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  createdBy        String?      @map("created_by") @db.Uuid
-  updatedBy        String?      @map("updated_by") @db.Uuid
+  id           String       @id @default(uuid()) @db.Uuid
+  tenantId     String       @map("tenant_id") @db.Uuid
+  employeeCode String       @map("employee_code")
+  fullName     String       @map("full_name")
+  phone        String?
+  status       DriverStatus @default(active)
+  linkedUserId String?      @map("linked_user_id") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdBy    String?      @map("created_by") @db.Uuid
+  updatedBy    String?      @map("updated_by") @db.Uuid
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  licences    DriverLicence[]
-  assignments VehicleAssignment[]
-  shifts      DriverShift[]
-  checkouts   VehicleCheckout[]
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  licences     DriverLicence[]
+  assignments  VehicleAssignment[]
+  shifts       DriverShift[]
+  trips        Trip[]
+  dispatchJobs DispatchJob[]
+  checkouts    VehicleCheckout[]
 
   @@unique([tenantId, employeeCode])
   @@unique([tenantId, linkedUserId])
@@ -294,15 +299,15 @@ model Driver {
 }
 
 model DriverLicence {
-  id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @map("tenant_id") @db.Uuid
-  driverId        String   @map("driver_id") @db.Uuid
-  issuingCountry  String   @map("issuing_country") @db.Char(2)
-  licenceNumber   String   @map("licence_number")
-  licenceClasses  String[] @map("licence_classes")
-  expiresAt       DateTime @map("expires_at") @db.Date
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy       String?  @map("created_by") @db.Uuid
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  driverId       String   @map("driver_id") @db.Uuid
+  issuingCountry String   @map("issuing_country") @db.Char(2)
+  licenceNumber  String   @map("licence_number")
+  licenceClasses String[] @map("licence_classes")
+  expiresAt      DateTime @map("expires_at") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy      String?  @map("created_by") @db.Uuid
 
   driver Driver @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
@@ -314,19 +319,19 @@ model DriverLicence {
 /// One row per exclusive vehicle hand-over. Partial unique indexes (migration only) allow at most one
 /// active assignment per vehicle and per driver.
 model VehicleAssignment {
-  id             String           @id @default(uuid()) @db.Uuid
-  tenantId       String           @map("tenant_id") @db.Uuid
-  vehicleId      String           @map("vehicle_id") @db.Uuid
-  driverId       String           @map("driver_id") @db.Uuid
-  status         AssignmentStatus @default(active)
-  startAt        DateTime         @map("start_at") @db.Timestamptz(6)
-  endAt          DateTime?        @map("end_at") @db.Timestamptz(6)
-  startOdometer  Int              @map("start_odometer")
-  endOdometer    Int?             @map("end_odometer")
-  licenceOverride String?         @map("licence_override")
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy      String?          @map("created_by") @db.Uuid
-  endedBy        String?          @map("ended_by") @db.Uuid
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @map("tenant_id") @db.Uuid
+  vehicleId       String           @map("vehicle_id") @db.Uuid
+  driverId        String           @map("driver_id") @db.Uuid
+  status          AssignmentStatus @default(active)
+  startAt         DateTime         @map("start_at") @db.Timestamptz(6)
+  endAt           DateTime?        @map("end_at") @db.Timestamptz(6)
+  startOdometer   Int              @map("start_odometer")
+  endOdometer     Int?             @map("end_odometer")
+  licenceOverride String?          @map("licence_override")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy       String?          @map("created_by") @db.Uuid
+  endedBy         String?          @map("ended_by") @db.Uuid
 
   vehicle Vehicle @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
   driver  Driver  @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
@@ -413,17 +418,17 @@ enum RenewalStatus {
 
 /// Private file bytes live in storage under objectKey. objectKey is never returned by the API.
 model FileObject {
-  id         String     @id @default(uuid()) @db.Uuid
-  tenantId   String     @map("tenant_id") @db.Uuid
-  objectKey  String     @unique @map("object_key")
-  fileName   String     @map("file_name")
-  contentType String    @map("content_type")
-  sizeBytes  Int        @map("size_bytes")
-  sha256     String
-  scanStatus ScanStatus @default(pending) @map("scan_status")
-  scannedAt  DateTime?  @map("scanned_at") @db.Timestamptz(6)
-  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy  String?    @map("created_by") @db.Uuid
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @map("tenant_id") @db.Uuid
+  objectKey   String     @unique @map("object_key")
+  fileName    String     @map("file_name")
+  contentType String     @map("content_type")
+  sizeBytes   Int        @map("size_bytes")
+  sha256      String
+  scanStatus  ScanStatus @default(pending) @map("scan_status")
+  scannedAt   DateTime?  @map("scanned_at") @db.Timestamptz(6)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy   String?    @map("created_by") @db.Uuid
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   documents Document[]
@@ -434,18 +439,18 @@ model FileObject {
 
 /// Subject is polymorphic (vehicle or driver), so the service verifies it belongs to the tenant.
 model Document {
-  id            String              @id @default(uuid()) @db.Uuid
-  tenantId      String              @map("tenant_id") @db.Uuid
-  subjectType   DocumentSubjectType @map("subject_type")
-  subjectId     String              @map("subject_id") @db.Uuid
-  docType       DocumentType        @map("doc_type")
-  version       Int
-  status        DocumentStatus      @default(current)
-  issuedOn      DateTime?           @map("issued_on") @db.Date
-  expiresOn     DateTime?           @map("expires_on") @db.Date
-  fileObjectId  String              @map("file_object_id") @db.Uuid
-  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  createdBy     String?             @map("created_by") @db.Uuid
+  id           String              @id @default(uuid()) @db.Uuid
+  tenantId     String              @map("tenant_id") @db.Uuid
+  subjectType  DocumentSubjectType @map("subject_type")
+  subjectId    String              @map("subject_id") @db.Uuid
+  docType      DocumentType        @map("doc_type")
+  version      Int
+  status       DocumentStatus      @default(current)
+  issuedOn     DateTime?           @map("issued_on") @db.Date
+  expiresOn    DateTime?           @map("expires_on") @db.Date
+  fileObjectId String              @map("file_object_id") @db.Uuid
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy    String?             @map("created_by") @db.Uuid
 
   tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   fileObject FileObject @relation(fields: [fileObjectId, tenantId], references: [id, tenantId], onDelete: Restrict)
@@ -468,7 +473,7 @@ model Renewal {
   completedAt DateTime?     @map("completed_at") @db.Timestamptz(6)
   completedBy String?       @map("completed_by") @db.Uuid
 
-  document  Document           @relation(fields: [documentId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  document  Document          @relation(fields: [documentId, tenantId], references: [id, tenantId], onDelete: Restrict)
   reminders RenewalReminder[]
 
   @@unique([tenantId, documentId])
@@ -528,7 +533,7 @@ model MaintenancePlan {
   createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
   createdBy       String?               @map("created_by") @db.Uuid
 
-  vehicle    Vehicle     @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  vehicle Vehicle @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
   @@unique([id, tenantId])
   @@index([tenantId, vehicleId])
@@ -555,7 +560,7 @@ model WorkOrder {
   completedAt   DateTime?       @map("completed_at") @db.Timestamptz(6)
   cancelledAt   DateTime?       @map("cancelled_at") @db.Timestamptz(6)
 
-  vehicle      Vehicle          @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  vehicle      Vehicle       @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
   serviceEvent ServiceEvent?
 
   @@unique([id, tenantId])
@@ -732,4 +737,184 @@ model InspectionItem {
   inspection Inspection @relation(fields: [inspectionId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
   @@map("inspection_items")
+}
+
+enum TripStatus {
+  open
+  completed
+}
+
+enum TripStopType {
+  arrived
+  departed
+  note
+}
+
+enum DispatchPriority {
+  low
+  normal
+  high
+  urgent
+}
+
+enum JobStatus {
+  planned
+  assigned
+  in_progress
+  completed
+  cancelled
+}
+
+enum JobEventType {
+  assigned
+  started
+  arrived
+  delivered
+  note
+  completed
+  cancelled
+}
+
+enum ReviewState {
+  draft
+  submitted
+  correction_requested
+  approved
+  closed
+}
+
+/// A driver-declared trip. Origin and destination are declarations, not GPS-confirmed (BR08).
+model Trip {
+  id                  String     @id @default(uuid()) @db.Uuid
+  tenantId            String     @map("tenant_id") @db.Uuid
+  vehicleId           String     @map("vehicle_id") @db.Uuid
+  driverId            String     @map("driver_id") @db.Uuid
+  shiftId             String?    @map("shift_id") @db.Uuid
+  checkoutId          String?    @map("checkout_id") @db.Uuid
+  jobId               String?    @map("job_id") @db.Uuid
+  status              TripStatus @default(open)
+  purpose             String
+  originDeclared      String     @map("origin_declared")
+  destinationDeclared String     @map("destination_declared")
+  startedAt           DateTime   @map("started_at") @db.Timestamptz(6)
+  startOdometer       Int        @map("start_odometer")
+  endedAt             DateTime?  @map("ended_at") @db.Timestamptz(6)
+  endOdometer         Int?       @map("end_odometer")
+  startedBy           String?    @map("started_by") @db.Uuid
+  endedBy             String?    @map("ended_by") @db.Uuid
+  clientRef           String?    @map("client_ref")
+  operationDate       DateTime   @map("operation_date") @db.Date
+
+  vehicle Vehicle    @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  driver  Driver     @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  stops   TripStop[]
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, clientRef])
+  @@index([tenantId, vehicleId, operationDate])
+  @@index([tenantId, driverId, startedAt])
+  @@map("trips")
+}
+
+/// Append-only: stops are never edited or deleted (BR06).
+model TripStop {
+  id         String       @id @default(uuid()) @db.Uuid
+  tenantId   String       @map("tenant_id") @db.Uuid
+  tripId     String       @map("trip_id") @db.Uuid
+  stopOrder  Int          @map("stop_order")
+  eventType  TripStopType @map("event_type")
+  occurredAt DateTime     @map("occurred_at") @db.Timestamptz(6)
+  receivedAt DateTime     @default(now()) @map("received_at") @db.Timestamptz(6)
+  recordedBy String?      @map("recorded_by") @db.Uuid
+  clientRef  String?      @map("client_ref")
+  note       String?
+  odometer   Int?
+
+  trip Trip @relation(fields: [tripId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([tripId, stopOrder])
+  @@unique([tenantId, clientRef])
+  @@map("trip_stops")
+}
+
+model DispatchJob {
+  id           String           @id @default(uuid()) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  reference    String
+  customerName String           @map("customer_name")
+  priority     DispatchPriority @default(normal)
+  status       JobStatus        @default(planned)
+  plannedStart DateTime?        @map("planned_start") @db.Timestamptz(6)
+  plannedEnd   DateTime?        @map("planned_end") @db.Timestamptz(6)
+  vehicleId    String?          @map("vehicle_id") @db.Uuid
+  driverId     String?          @map("driver_id") @db.Uuid
+  createdBy    String?          @map("created_by") @db.Uuid
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt  DateTime?        @map("completed_at") @db.Timestamptz(6)
+  cancelledAt  DateTime?        @map("cancelled_at") @db.Timestamptz(6)
+
+  vehicle Vehicle?   @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  driver  Driver?    @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  events  JobEvent[]
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, reference])
+  @@index([tenantId, status])
+  @@map("dispatch_jobs")
+}
+
+/// Append-only job progress log. The job row holds current state; this holds history.
+model JobEvent {
+  id         String       @id @default(uuid()) @db.Uuid
+  tenantId   String       @map("tenant_id") @db.Uuid
+  jobId      String       @map("job_id") @db.Uuid
+  eventType  JobEventType @map("event_type")
+  occurredAt DateTime     @map("occurred_at") @db.Timestamptz(6)
+  receivedAt DateTime     @default(now()) @map("received_at") @db.Timestamptz(6)
+  recordedBy String?      @map("recorded_by") @db.Uuid
+  clientRef  String?      @map("client_ref")
+  note       String?
+
+  job DispatchJob @relation(fields: [jobId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([tenantId, clientRef])
+  @@index([jobId, occurredAt])
+  @@map("job_events")
+}
+
+/// One review per vehicle per Dubai operation date. Its history lives in ReviewEvent.
+model DailyReview {
+  id            String      @id @default(uuid()) @db.Uuid
+  tenantId      String      @map("tenant_id") @db.Uuid
+  vehicleId     String      @map("vehicle_id") @db.Uuid
+  operationDate DateTime    @map("operation_date") @db.Date
+  state         ReviewState @default(draft)
+  submittedBy   String?     @map("submitted_by") @db.Uuid
+  submittedAt   DateTime?   @map("submitted_at") @db.Timestamptz(6)
+  decidedBy     String?     @map("decided_by") @db.Uuid
+  decidedAt     DateTime?   @map("decided_at") @db.Timestamptz(6)
+
+  vehicle Vehicle       @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  events  ReviewEvent[]
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, vehicleId, operationDate])
+  @@map("daily_reviews")
+}
+
+/// Append-only review history: who moved the review, from which state, and why.
+model ReviewEvent {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  reviewId    String       @map("review_id") @db.Uuid
+  fromState   ReviewState? @map("from_state")
+  toState     ReviewState  @map("to_state")
+  actorUserId String?      @map("actor_user_id") @db.Uuid
+  occurredAt  DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  note        String?
+
+  review DailyReview @relation(fields: [reviewId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@index([reviewId, occurredAt])
+  @@map("review_events")
 }
