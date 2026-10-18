@@ -192,4 +192,18 @@ export class TenantsService {
       };
     });
   }
+
+  /** The caller's roles and permissions in this tenant, plus the driver record linked to them (if any). */
+  async accessProfile(access: TenantAccess) {
+    const driver = await this.prisma.driver.findFirst({
+      where: { tenantId: access.tenantId, linkedUserId: access.userId },
+      select: { id: true },
+    });
+    return {
+      tenantId: access.tenantId,
+      roleCodes: access.roleCodes,
+      permissions: [...access.permissions].sort(),
+      linkedDriverId: driver?.id ?? null,
+    };
+  }
 }

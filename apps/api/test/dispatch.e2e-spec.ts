@@ -516,6 +516,16 @@ describe("trips, dispatch jobs and daily reviews", () => {
       .send({})
       .expect(403);
     await request(server).get(`${base()}/trips`).set("Cookie", driverCookie).expect(200);
+    const access = await request(server)
+      .get(`${base()}/access`)
+      .set("Cookie", driverCookie)
+      .expect(200);
+    expect(access.body.linkedDriverId).toBe(driverLinked);
+    const adminAccess = await request(server)
+      .get(`${base()}/access`)
+      .set("Cookie", fleetCookie)
+      .expect(200);
+    expect(adminAccess.body.linkedDriverId).toBeNull();
   });
 
   it("keeps tenants isolated for trips, jobs and reviews", async () => {

@@ -36,6 +36,8 @@ jobs:
             --from-migrations ../../database/migrations --to-schema ../../database/schema.prisma --exit-code
       - run: pnpm lint
       - run: pnpm typecheck
+      - name: Install Chromium for browser tests
+        run: pnpm --filter @fleetos/web exec playwright install --with-deps chromium
       - run: pnpm test
       - run: pnpm build
       - name: Docker build (api, web)
