@@ -6,6 +6,12 @@ COPY . .
 RUN pnpm install --frozen-lockfile --filter @fleetos/api... && pnpm --filter @fleetos/api build \
  && pnpm --filter @fleetos/api --prod deploy /deploy
 
+# Runs `prisma migrate deploy` against DATABASE_URL and exits. Docker compose runs it before the API starts.
+# Declared before `run` so that a plain `docker build` still produces the API image (the last stage).
+FROM build AS migrate
+WORKDIR /repo
+CMD ["pnpm", "--filter", "@fleetos/api", "db:deploy"]
+
 FROM node:26-alpine AS run
 WORKDIR /app
 ENV NODE_ENV=production PORT=4000
