@@ -10,13 +10,23 @@ services:
     image: redis:8-alpine
     ports: ["6379:6379"]
     healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 10 }
+  migrate:
+    build: { context: .., dockerfile: apps/api/Dockerfile, target: migrate }
+    environment: { DATABASE_URL: "postgresql://fleetos:fleetos@postgres:5432/fleetos" }
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: "no"
   api:
     build: { context: .., dockerfile: apps/api/Dockerfile }
     environment: { DATABASE_URL: "postgresql://fleetos:fleetos@postgres:5432/fleetos", REDIS_URL: "redis://redis:6379", PORT: "4000" }
     ports: ["4000:4000"]
-    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
   web:
-    build: { context: .., dockerfile: apps/web/Dockerfile }
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args: { FLEETOS_API_URL: "http://api:4000" }
     ports: ["3000:3000"]
     depends_on: [api]
 volumes:

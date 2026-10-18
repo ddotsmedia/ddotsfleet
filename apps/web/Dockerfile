@@ -2,6 +2,9 @@ FROM node:26-alpine AS build
 WORKDIR /repo
 RUN npm install -g pnpm@12.11.2
 ENV HUSKY=0
+# The browser calls /fleetos-api on the web origin; this rewrite target is fixed at build time.
+ARG FLEETOS_API_URL=http://api:4000
+ENV FLEETOS_API_URL=$FLEETOS_API_URL
 COPY . .
 RUN pnpm install --frozen-lockfile --filter @fleetos/web... && pnpm --filter @fleetos/web build
 
