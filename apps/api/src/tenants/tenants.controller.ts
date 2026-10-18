@@ -45,11 +45,7 @@ export class TenantsController {
   @Get(":tenantId/access")
   @UseGuards(TenantGuard)
   access(@TenantAccessContext() access: TenantAccess) {
-    return {
-      tenantId: access.tenantId,
-      roleCodes: access.roleCodes,
-      permissions: [...access.permissions].sort(),
-    };
+    return this.tenants.accessProfile(access);
   }
 
   @Get(":tenantId/members")

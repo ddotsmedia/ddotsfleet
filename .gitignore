@@ -9,3 +9,7 @@ coverage
 
 apps/api/src/generated/
 var/
+
+# Playwright output
+/apps/web/test-results/
+/apps/web/playwright-report/
