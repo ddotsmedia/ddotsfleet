@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -10,6 +9,7 @@ import { PrismaService } from "../database/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import type { TenantAccess } from "../access/access.service.js";
 import { MaintenanceService } from "../maintenance/maintenance.service.js";
+import { assertActsForDriver, loadActiveDriver } from "../access/driver-scope.js";
 import type {
   EndShiftInput,
   ListCheckoutsQuery,
@@ -525,27 +525,12 @@ export class OperationsService {
     return shift;
   }
 
-  private async loadActiveDriver(tenantId: string, driverId: string) {
-    const driver = await this.prisma.driver.findFirst({
-      where: { id: driverId, tenantId },
-      select: { id: true, status: true },
-    });
-    if (!driver) throw new NotFoundException("driver_not_found");
-    if (driver.status !== "active") throw new ConflictException("driver_not_active");
-    return driver;
+  private loadActiveDriver(tenantId: string, driverId: string) {
+    return loadActiveDriver(this.prisma, tenantId, driverId);
   }
 
-  /**
-   * Holders of driver:write act for any driver in the tenant. Everyone else (the driver role)
-   * may only act for the driver record linked to their own user account.
-   */
-  private async assertActsForDriver(access: TenantAccess, driverId: string): Promise<void> {
-    if (access.permissions.has("driver:write")) return;
-    const own = await this.prisma.driver.findFirst({
-      where: { tenantId: access.tenantId, linkedUserId: access.userId },
-      select: { id: true },
-    });
-    if (!own || own.id !== driverId) throw new ForbiddenException("driver_scope");
+  private assertActsForDriver(access: TenantAccess, driverId: string): Promise<void> {
+    return assertActsForDriver(this.prisma, access, driverId);
   }
 
   private async lockShift(
