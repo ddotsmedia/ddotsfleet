@@ -30,6 +30,7 @@ export const updateDriverSchema = z
     fullName: driverFields.fullName.optional(),
     phone: driverFields.phone.optional(),
     status: z.enum(["active", "suspended", "left"]).optional(),
+    linkedUserId: z.uuid().nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, { message: "empty_patch" });
 

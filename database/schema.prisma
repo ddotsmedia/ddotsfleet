@@ -246,6 +246,8 @@ model Vehicle {
   workOrders WorkOrder[]
   serviceEvents ServiceEvent[]
   defects Defect[]
+  checkouts VehicleCheckout[]
+  inspections Inspection[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, fleetCode])
@@ -272,6 +274,7 @@ model Driver {
   fullName         String       @map("full_name")
   phone            String?
   status           DriverStatus @default(active)
+  linkedUserId     String?      @map("linked_user_id") @db.Uuid
   createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   createdBy        String?      @map("created_by") @db.Uuid
@@ -280,8 +283,11 @@ model Driver {
   tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   licences    DriverLicence[]
   assignments VehicleAssignment[]
+  shifts      DriverShift[]
+  checkouts   VehicleCheckout[]
 
   @@unique([tenantId, employeeCode])
+  @@unique([tenantId, linkedUserId])
   @@unique([id, tenantId])
   @@index([tenantId, status])
   @@map("drivers")
@@ -600,4 +606,130 @@ model Defect {
   @@unique([id, tenantId])
   @@index([tenantId, vehicleId, status])
   @@map("defects")
+}
+
+enum ShiftStatus {
+  open
+  closed
+}
+
+enum ShiftEventType {
+  break_start
+  break_end
+}
+
+enum CheckoutStatus {
+  open
+  returned
+}
+
+enum InspectionKind {
+  pre_trip
+  post_trip
+}
+
+enum InspectionAnswer {
+  pass
+  fail
+  na
+}
+
+/// A duty period. Only one open shift per driver (migration partial index).
+model DriverShift {
+  id        String      @id @default(uuid()) @db.Uuid
+  tenantId  String      @map("tenant_id") @db.Uuid
+  driverId  String      @map("driver_id") @db.Uuid
+  status    ShiftStatus @default(open)
+  startedAt DateTime    @map("started_at") @db.Timestamptz(6)
+  endedAt   DateTime?   @map("ended_at") @db.Timestamptz(6)
+  startedBy String?     @map("started_by") @db.Uuid
+  endedBy   String?     @map("ended_by") @db.Uuid
+
+  driver Driver       @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  events ShiftEvent[]
+
+  @@unique([id, tenantId])
+  @@index([tenantId, driverId, startedAt])
+  @@map("driver_shifts")
+}
+
+/// Append-only duty events. clientRef makes offline sync retries idempotent.
+model ShiftEvent {
+  id         String         @id @default(uuid()) @db.Uuid
+  tenantId   String         @map("tenant_id") @db.Uuid
+  shiftId    String         @map("shift_id") @db.Uuid
+  eventType  ShiftEventType @map("event_type")
+  occurredAt DateTime       @map("occurred_at") @db.Timestamptz(6)
+  receivedAt DateTime       @default(now()) @map("received_at") @db.Timestamptz(6)
+  recordedBy String?        @map("recorded_by") @db.Uuid
+  clientRef  String?        @map("client_ref")
+
+  shift DriverShift @relation(fields: [shiftId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([tenantId, clientRef])
+  @@index([shiftId, occurredAt])
+  @@map("shift_events")
+}
+
+/// Exclusive vehicle use. Partial unique indexes allow one open checkout per vehicle and per driver.
+model VehicleCheckout {
+  id                 String         @id @default(uuid()) @db.Uuid
+  tenantId           String         @map("tenant_id") @db.Uuid
+  vehicleId          String         @map("vehicle_id") @db.Uuid
+  driverId           String         @map("driver_id") @db.Uuid
+  shiftId            String?        @map("shift_id") @db.Uuid
+  status             CheckoutStatus @default(open)
+  openedAt           DateTime       @map("opened_at") @db.Timestamptz(6)
+  openingOdometer    Int            @map("opening_odometer")
+  openingFuelPercent Int            @map("opening_fuel_percent")
+  openingDamageNotes String?        @map("opening_damage_notes")
+  openedBy           String?        @map("opened_by") @db.Uuid
+  returnedAt         DateTime?      @map("returned_at") @db.Timestamptz(6)
+  closingOdometer    Int?           @map("closing_odometer")
+  closingFuelPercent Int?           @map("closing_fuel_percent")
+  closingDamageNotes String?        @map("closing_damage_notes")
+  returnedBy         String?        @map("returned_by") @db.Uuid
+
+  vehicle Vehicle @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  driver  Driver  @relation(fields: [driverId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@index([tenantId, vehicleId, openedAt])
+  @@map("vehicle_checkouts")
+}
+
+/// Pre- or post-trip checklist. Each failed item with a severity creates a Defect (Task 10).
+model Inspection {
+  id          String           @id @default(uuid()) @db.Uuid
+  tenantId    String           @map("tenant_id") @db.Uuid
+  vehicleId   String           @map("vehicle_id") @db.Uuid
+  checkoutId  String?          @map("checkout_id") @db.Uuid
+  kind        InspectionKind
+  result      InspectionAnswer
+  performedAt DateTime         @default(now()) @map("performed_at") @db.Timestamptz(6)
+  performedBy String?          @map("performed_by") @db.Uuid
+  clientRef   String?          @map("client_ref")
+
+  vehicle Vehicle          @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  items   InspectionItem[]
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, clientRef])
+  @@index([tenantId, vehicleId, performedAt])
+  @@map("inspections")
+}
+
+model InspectionItem {
+  id           String           @id @default(uuid()) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  inspectionId String           @map("inspection_id") @db.Uuid
+  code         String
+  label        String
+  answer       InspectionAnswer
+  severity     DefectSeverity?
+  notes        String?
+
+  inspection Inspection @relation(fields: [inspectionId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@map("inspection_items")
 }
