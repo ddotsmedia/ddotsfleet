@@ -242,6 +242,10 @@ model Vehicle {
 
   tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   assignments VehicleAssignment[]
+  maintenancePlans MaintenancePlan[]
+  workOrders WorkOrder[]
+  serviceEvents ServiceEvent[]
+  defects Defect[]
 
   @@unique([tenantId, plateNumber])
   @@unique([tenantId, fleetCode])
@@ -479,4 +483,121 @@ model RenewalReminder {
 
   @@unique([renewalId, stageDays])
   @@map("renewal_reminders")
+}
+
+enum MaintenancePlanStatus {
+  active
+  retired
+}
+
+enum WorkOrderStatus {
+  open
+  approved
+  completed
+  cancelled
+}
+
+enum DefectSeverity {
+  minor
+  major
+  critical
+}
+
+enum DefectStatus {
+  open
+  cleared
+}
+
+/// Service interval for a vehicle. At least one of intervalKm or intervalDays is required (migration check).
+model MaintenancePlan {
+  id              String                @id @default(uuid()) @db.Uuid
+  tenantId        String                @map("tenant_id") @db.Uuid
+  vehicleId       String                @map("vehicle_id") @db.Uuid
+  name            String
+  intervalKm      Int?                  @map("interval_km")
+  intervalDays    Int?                  @map("interval_days")
+  nextDueOdometer Int?                  @map("next_due_odometer")
+  nextDueDate     DateTime?             @map("next_due_date") @db.Date
+  status          MaintenancePlanStatus @default(active)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy       String?               @map("created_by") @db.Uuid
+
+  vehicle    Vehicle     @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@index([tenantId, vehicleId])
+  @@map("maintenance_plans")
+}
+
+/// planId and approvedBy are plain columns: the service verifies tenant scope for them.
+model WorkOrder {
+  id            String          @id @default(uuid()) @db.Uuid
+  tenantId      String          @map("tenant_id") @db.Uuid
+  vehicleId     String          @map("vehicle_id") @db.Uuid
+  planId        String?         @map("plan_id") @db.Uuid
+  title         String
+  status        WorkOrderStatus @default(open)
+  vendorName    String?         @map("vendor_name")
+  labourFils    Int             @default(0) @map("labour_fils")
+  partsFils     Int             @default(0) @map("parts_fils")
+  invoiceNumber String?         @map("invoice_number")
+  createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String?         @map("created_by") @db.Uuid
+  approvedBy    String?         @map("approved_by") @db.Uuid
+  approvedAt    DateTime?       @map("approved_at") @db.Timestamptz(6)
+  completedBy   String?         @map("completed_by") @db.Uuid
+  completedAt   DateTime?       @map("completed_at") @db.Timestamptz(6)
+  cancelledAt   DateTime?       @map("cancelled_at") @db.Timestamptz(6)
+
+  vehicle      Vehicle          @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  serviceEvent ServiceEvent?
+
+  @@unique([id, tenantId])
+  @@index([tenantId, status])
+  @@index([vehicleId])
+  @@map("work_orders")
+}
+
+/// Append-only service history, written once when a work order completes.
+model ServiceEvent {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  vehicleId     String   @map("vehicle_id") @db.Uuid
+  workOrderId   String   @map("work_order_id") @db.Uuid
+  serviceOn     DateTime @map("service_on") @db.Date
+  odometer      Int
+  vendorName    String?  @map("vendor_name")
+  labourFils    Int      @map("labour_fils")
+  partsFils     Int      @map("parts_fils")
+  invoiceNumber String?  @map("invoice_number")
+  recordedBy    String?  @map("recorded_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  vehicle   Vehicle   @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  workOrder WorkOrder @relation(fields: [workOrderId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([workOrderId, tenantId])
+  @@index([tenantId, vehicleId, serviceOn])
+  @@map("service_events")
+}
+
+/// Critical open defects block dispatch until a maintenance clearance is recorded (BR07).
+model Defect {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @map("tenant_id") @db.Uuid
+  vehicleId     String         @map("vehicle_id") @db.Uuid
+  severity      DefectSeverity
+  status        DefectStatus   @default(open)
+  description   String
+  reportedBy    String?        @map("reported_by") @db.Uuid
+  reportedAt    DateTime       @default(now()) @map("reported_at") @db.Timestamptz(6)
+  clearedBy     String?        @map("cleared_by") @db.Uuid
+  clearedAt     DateTime?      @map("cleared_at") @db.Timestamptz(6)
+  clearanceNote String?        @map("clearance_note")
+
+  vehicle Vehicle @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([id, tenantId])
+  @@index([tenantId, vehicleId, status])
+  @@map("defects")
 }
