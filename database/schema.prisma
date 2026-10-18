@@ -50,6 +50,8 @@ model Tenant {
   vehicles    Vehicle[]
   importJobs  ImportJob[]
   drivers     Driver[]
+  fileObjects FileObject[]
+  documents   Document[]
   auditEvents AuditEvent[]
 
   @@map("tenants")
@@ -368,4 +370,113 @@ model ImportJob {
 
   @@index([tenantId, status])
   @@map("import_jobs")
+}
+
+enum DocumentSubjectType {
+  vehicle
+  driver
+}
+
+enum DocumentType {
+  vehicle_registration
+  vehicle_insurance
+  driving_licence
+  emirates_id
+  other
+}
+
+enum DocumentStatus {
+  current
+  superseded
+}
+
+enum ScanStatus {
+  pending
+  clean
+  rejected
+}
+
+enum RenewalStatus {
+  open
+  completed
+}
+
+/// Private file bytes live in storage under objectKey. objectKey is never returned by the API.
+model FileObject {
+  id         String     @id @default(uuid()) @db.Uuid
+  tenantId   String     @map("tenant_id") @db.Uuid
+  objectKey  String     @unique @map("object_key")
+  fileName   String     @map("file_name")
+  contentType String    @map("content_type")
+  sizeBytes  Int        @map("size_bytes")
+  sha256     String
+  scanStatus ScanStatus @default(pending) @map("scan_status")
+  scannedAt  DateTime?  @map("scanned_at") @db.Timestamptz(6)
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy  String?    @map("created_by") @db.Uuid
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  documents Document[]
+
+  @@unique([id, tenantId])
+  @@map("file_objects")
+}
+
+/// Subject is polymorphic (vehicle or driver), so the service verifies it belongs to the tenant.
+model Document {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @map("tenant_id") @db.Uuid
+  subjectType   DocumentSubjectType @map("subject_type")
+  subjectId     String              @map("subject_id") @db.Uuid
+  docType       DocumentType        @map("doc_type")
+  version       Int
+  status        DocumentStatus      @default(current)
+  issuedOn      DateTime?           @map("issued_on") @db.Date
+  expiresOn     DateTime?           @map("expires_on") @db.Date
+  fileObjectId  String              @map("file_object_id") @db.Uuid
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  createdBy     String?             @map("created_by") @db.Uuid
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  fileObject FileObject @relation(fields: [fileObjectId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  renewals   Renewal[]
+
+  @@unique([tenantId, subjectType, subjectId, docType, version], map: "documents_subject_version_key")
+  @@unique([id, tenantId])
+  @@index([tenantId, expiresOn])
+  @@map("documents")
+}
+
+/// One open renewal task per document version (unique below). Completed when a newer document is uploaded.
+model Renewal {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  documentId  String        @map("document_id") @db.Uuid
+  status      RenewalStatus @default(open)
+  dueOn       DateTime      @map("due_on") @db.Date
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  completedAt DateTime?     @map("completed_at") @db.Timestamptz(6)
+  completedBy String?       @map("completed_by") @db.Uuid
+
+  document  Document           @relation(fields: [documentId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  reminders RenewalReminder[]
+
+  @@unique([tenantId, documentId])
+  @@unique([id, tenantId])
+  @@index([tenantId, status, dueOn])
+  @@map("renewals")
+}
+
+/// Idempotency record: a reminder stage is recorded once per renewal, so reruns never duplicate it.
+model RenewalReminder {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  renewalId String   @map("renewal_id") @db.Uuid
+  stageDays Int      @map("stage_days")
+  sentAt    DateTime @default(now()) @map("sent_at") @db.Timestamptz(6)
+
+  renewal Renewal @relation(fields: [renewalId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  @@unique([renewalId, stageDays])
+  @@map("renewal_reminders")
 }

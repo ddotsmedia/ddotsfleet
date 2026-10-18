@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AccessModule } from "./access/access.module.js";
 import { AuthModule } from "./auth/auth.module.js";
+import { DocumentsModule } from "./documents/documents.module.js";
 import { DriversModule } from "./drivers/drivers.module.js";
 import { DatabaseModule } from "./database/database.module.js";
 import { HealthModule } from "./health/health.module.js";
@@ -16,6 +17,7 @@ import { VehiclesModule } from "./vehicles/vehicles.module.js";
     TenantsModule,
     VehiclesModule,
     DriversModule,
+    DocumentsModule,
   ],
 })
 export class AppModule {}
