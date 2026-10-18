@@ -48,6 +48,7 @@ model Tenant {
   roles       Role[]
   invitations Invitation[]
   vehicles    Vehicle[]
+  importJobs  ImportJob[]
   drivers     Driver[]
   auditEvents AuditEvent[]
 
@@ -340,4 +341,31 @@ model AuditEvent {
 
   @@index([tenantId, entityType, entityId])
   @@map("audit_events")
+}
+
+enum ImportStatus {
+  previewed
+  committed
+}
+
+model ImportJob {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  createdBy   String?      @map("created_by") @db.Uuid
+  status      ImportStatus @default(previewed)
+  checksum    String
+  totalRows   Int          @map("total_rows")
+  validRows   Int          @map("valid_rows")
+  errorRows   Int          @map("error_rows")
+  rowErrors   Json         @map("row_errors")
+  payload     Json
+  expiresAt   DateTime     @map("expires_at") @db.Timestamptz(6)
+  committedAt DateTime?    @map("committed_at") @db.Timestamptz(6)
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status])
+  @@map("import_jobs")
 }
