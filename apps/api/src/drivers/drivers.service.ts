@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { PrismaService } from "../database/prisma.service.js";
 import { AuditService } from "../audit/audit.service.js";
 import type { TenantAccess } from "../access/access.service.js";
@@ -122,9 +127,20 @@ export class DriversService {
       if (value === undefined) continue;
       const before = current[key] ?? null;
       if (before === value) continue;
-      changes[key] = key === "phone" ? { changed: true } : { from: before, to: value };
+      changes[key] =
+        key === "phone" || key === "linkedUserId" ? { changed: true } : { from: before, to: value };
     }
     if (Object.keys(changes).length === 0) return existing;
+
+    if (input.linkedUserId) {
+      // A driver can only be linked to a user who is an active member of this tenant.
+      const membership = await this.prisma.tenantMembership.findUnique({
+        where: { tenantId_userId: { tenantId: access.tenantId, userId: input.linkedUserId } },
+        select: { status: true },
+      });
+      if (!membership || membership.status !== "active")
+        throw new BadRequestException("user_not_member");
+    }
 
     if (input.status && input.status !== "active") {
       const active = await this.prisma.vehicleAssignment.findFirst({
