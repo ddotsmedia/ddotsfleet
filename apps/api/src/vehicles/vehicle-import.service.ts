@@ -155,34 +155,39 @@ export class VehicleImportService {
     const now = new Date();
     const rows = job.payload as unknown as CreateVehicleInput[];
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        // Claim first so two concurrent commits of the same job cannot both insert.
-        const claimed = await tx.importJob.updateMany({
-          where: { id: jobId, tenantId: access.tenantId, status: "previewed" },
-          data: { status: "committed", committedAt: now },
-        });
-        if (claimed.count !== 1) throw new ConflictException("import_already_committed");
-
-        for (let i = 0; i < rows.length; i += BATCH) {
-          await tx.vehicle.createMany({
-            data: rows.slice(i, i + BATCH).map((r) => ({
-              ...r,
-              tenantId: access.tenantId,
-              createdBy: access.userId,
-              updatedBy: access.userId,
-            })),
+      // Prisma's default interactive timeout is 5 s, which a 10,000-row batch insert can exceed on a
+      // slow runner. The commit stays atomic; only the time budget is widened.
+      return await this.prisma.$transaction(
+        async (tx) => {
+          // Claim first so two concurrent commits of the same job cannot both insert.
+          const claimed = await tx.importJob.updateMany({
+            where: { id: jobId, tenantId: access.tenantId, status: "previewed" },
+            data: { status: "committed", committedAt: now },
           });
-        }
-        await this.audit.record(tx, {
-          tenantId: access.tenantId,
-          actorUserId: access.userId,
-          entityType: "vehicle_import",
-          entityId: jobId,
-          action: "commit",
-          changes: { count: rows.length, checksum: job.checksum },
-        });
-        return { id: jobId, committed: rows.length };
-      });
+          if (claimed.count !== 1) throw new ConflictException("import_already_committed");
+
+          for (let i = 0; i < rows.length; i += BATCH) {
+            await tx.vehicle.createMany({
+              data: rows.slice(i, i + BATCH).map((r) => ({
+                ...r,
+                tenantId: access.tenantId,
+                createdBy: access.userId,
+                updatedBy: access.userId,
+              })),
+            });
+          }
+          await this.audit.record(tx, {
+            tenantId: access.tenantId,
+            actorUserId: access.userId,
+            entityType: "vehicle_import",
+            entityId: jobId,
+            action: "commit",
+            changes: { count: rows.length, checksum: job.checksum },
+          });
+          return { id: jobId, committed: rows.length };
+        },
+        { timeout: 60_000, maxWait: 10_000 },
+      );
     } catch (e) {
       if ((e as { code?: string }).code === "P2002") throw new ConflictException("import_conflict");
       throw e;
