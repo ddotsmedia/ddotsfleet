@@ -200,6 +200,21 @@ describe("shifts, break events, checkouts and inspections", () => {
       .expect(201);
   });
 
+  it("lets a driver read only their own open shift", async () => {
+    const mine = await request(server)
+      .get(`${base()}/shifts/mine`)
+      .set("Cookie", driverUserCookie)
+      .expect(200);
+    expect(mine.body.items.map((s: { id: string }) => s.id)).toEqual([shiftId]);
+
+    // An owner has no linked driver record, so they see no driver shifts through this route.
+    const owner = await request(server)
+      .get(`${base()}/shifts/mine`)
+      .set("Cookie", ownerA)
+      .expect(200);
+    expect(owner.body.items).toEqual([]);
+  });
+
   it("enforces tenant isolation and permissions on shifts", async () => {
     await request(server).get(`${base()}/shifts`).set("Cookie", ownerB).expect(404);
     await request(server)
