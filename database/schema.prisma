@@ -803,6 +803,7 @@ model Trip {
   startedBy           String?    @map("started_by") @db.Uuid
   endedBy             String?    @map("ended_by") @db.Uuid
   clientRef           String?    @map("client_ref")
+  endClientRef        String?    @map("end_client_ref")
   operationDate       DateTime   @map("operation_date") @db.Date
 
   vehicle Vehicle    @relation(fields: [vehicleId, tenantId], references: [id, tenantId], onDelete: Restrict)
@@ -811,6 +812,7 @@ model Trip {
 
   @@unique([id, tenantId])
   @@unique([tenantId, clientRef])
+  @@unique([tenantId, endClientRef])
   @@index([tenantId, vehicleId, operationDate])
   @@index([tenantId, driverId, startedAt])
   @@map("trips")
