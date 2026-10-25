@@ -322,6 +322,17 @@ export class DispatchService {
 
   async completeTrip(access: TenantAccess, tripId: string, input: CompleteTripInput) {
     const tenantId = access.tenantId;
+    if (input.clientRef) {
+      // Offline retry of a completion that already succeeded returns the closed trip.
+      const dup = await this.prisma.trip.findFirst({
+        where: { tenantId, endClientRef: input.clientRef },
+        select: TRIP_SELECT,
+      });
+      if (dup) {
+        if (dup.id !== tripId) throw new ConflictException("client_ref_conflict");
+        return dup;
+      }
+    }
     const trip = await this.loadTrip(tenantId, tripId);
     await assertActsForDriver(this.prisma, access, trip.driverId);
     const endedAt = input.endedAt ? new Date(input.endedAt) : new Date();
@@ -354,6 +365,7 @@ export class DispatchService {
             endedAt,
             endOdometer: input.endOdometer,
             endedBy: access.userId,
+            endClientRef: input.clientRef ?? null,
           },
           select: TRIP_SELECT,
         });
