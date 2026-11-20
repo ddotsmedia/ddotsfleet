@@ -35,6 +35,7 @@ export const tripStopSchema = z
 export const completeTripSchema = z.object({
   endOdometer: odometer,
   endedAt: when.optional(),
+  clientRef: ref.optional(),
 });
 
 export const listTripsSchema = z.object({

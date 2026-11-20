@@ -265,9 +265,18 @@ describe("trips, dispatch jobs and daily reviews", () => {
     const done = await request(server)
       .post(`${base()}/trips/${trip1}/complete`)
       .set("Cookie", driverCookie)
-      .send({ endOdometer: 10_100 })
+      .send({ endOdometer: 10_100, clientRef: "end-trip1" })
       .expect(201);
     expect(done.body.status).toBe("completed");
+
+    // Offline retry with the same clientRef returns the closed trip instead of 409.
+    const replay = await request(server)
+      .post(`${base()}/trips/${trip1}/complete`)
+      .set("Cookie", driverCookie)
+      .send({ endOdometer: 10_100, clientRef: "end-trip1" })
+      .expect(201);
+    expect(replay.body.id).toBe(trip1);
+    expect(replay.body.endOdometer).toBe(10_100);
 
     await request(server)
       .post(`${base()}/trips/${trip1}/stops`)
