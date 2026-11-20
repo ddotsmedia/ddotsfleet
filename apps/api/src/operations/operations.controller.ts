@@ -37,6 +37,13 @@ export class ShiftsController {
     };
   }
 
+  /** The caller's own open shifts. Drivers hold shift:write but not shift:read. */
+  @Get("mine")
+  @RequirePermissions("shift:write")
+  async mine(@TenantAccessContext() access: TenantAccess) {
+    return { items: await this.operations.listOwnOpenShifts(access) };
+  }
+
   @Post()
   @RequirePermissions("shift:write")
   async start(@TenantAccessContext() access: TenantAccess, @Body() body: unknown) {

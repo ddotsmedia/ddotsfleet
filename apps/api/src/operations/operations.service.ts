@@ -86,6 +86,21 @@ export class OperationsService {
     });
   }
 
+  /** Scoped to the driver linked to the caller's account; no link means no shifts. */
+  async listOwnOpenShifts(access: TenantAccess) {
+    const own = await this.prisma.driver.findFirst({
+      where: { tenantId: access.tenantId, linkedUserId: access.userId },
+      select: { id: true },
+    });
+    if (!own) return [];
+    return this.prisma.driverShift.findMany({
+      where: { tenantId: access.tenantId, driverId: own.id, status: "open" },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+      take: 5,
+      select: SHIFT_SELECT,
+    });
+  }
+
   /** One open shift per driver; the partial unique index is the backstop for concurrent starts. */
   async startShift(access: TenantAccess, input: StartShiftInput) {
     const tenantId = access.tenantId;
